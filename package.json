@@ -9,7 +9,7 @@
     "preview": "vite preview",
     "build:local": "vite build",
     "predeploy": "DEPLOY_TARGET=ghpages vite build",
-    "deploy": "gh-pages -d dist"
+    "deploy": "gh-pages -d dist-gh"
   },
   "dependencies": {
     "react": "^18.3.1",
