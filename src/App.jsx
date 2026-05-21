@@ -493,17 +493,48 @@ export default function App() {
     for(let i=0;i<all.length;i++){
       const s=all[i];setProg({n:i,total:all.length});
       try{
-        const cats=s.catalysts.map((c,idx)=>`${idx+1}. ${c.text}`).join("\n");
-        const prompt=`Search latest Korean stock news and 공시 for "${s.name}" (${s.code}).\nThesis: ${s.thesis}\nCatalysts:\n${cats}\n\nReturn ONLY valid JSON:\n{"catalysts":[{"done":true/false,"note":"한국어 이유"}],"status":"thesis_valid"|"catalyst_wait"|"damage_sign"|"monitoring","summary":"한국어 2-3문장 현황"}`;
+        const cats=s.catalysts.map((c,idx)=>`${idx+1}. [${c.done?"완료":"미완료"}] ${c.text}${c.note?` (메모: ${c.note})`:""}` ).join("\n");
+        const prompt=`최신 한국 주식 뉴스와 공시를 검색하여 "${s.name}" (종목코드: ${s.code}) 종목을 점검해주세요.
+
+현재 Thesis: ${s.thesis}
+현재 Catalysts:
+${cats}
+
+다음 JSON 형식으로만 응답하세요 (다른 텍스트 없이):
+{
+  "thesis": "최신 정보를 반영한 thesis 업데이트 (기존 thesis를 바탕으로 새로운 정보 추가/수정, 한국어, 2-4문장)",
+  "catalysts": [
+    {"text": "카탈리스트 항목명", "done": true/false, "note": "최신 진행상황 한국어 메모"}
+  ],
+  "new_catalysts": [
+    {"text": "새로 발굴한 카탈리스트 (없으면 빈 배열)"}
+  ],
+  "status": "thesis_valid" | "catalyst_wait" | "damage_sign" | "monitoring",
+  "summary": "현재 투자 포인트 및 주요 이슈 2-3문장 한국어 요약"
+}
+
+주의: catalysts 배열은 기존 항목 순서 그대로 유지, new_catalysts는 기존에 없는 새 항목만 추가`;
         const r=await callGemini(prompt);
         if(r){
           upd(p=>p.map(x=>{
             if(x.id!==s.id)return x;
-            const nc=x.catalysts.map((c,idx)=>{const u=r.catalysts?.[idx];return u?{...c,done:u.done!==undefined?u.done:c.done,note:u.note||c.note}:c;});
-            return{...x,catalysts:nc,status:r.status||x.status,aiNote:r.summary||x.aiNote};
+            // 기존 카탈리스트 업데이트
+            const nc=x.catalysts.map((c,idx)=>{
+              const u=r.catalysts?.[idx];
+              return u?{...c,done:u.done!==undefined?u.done:c.done,note:u.note||c.note,text:u.text||c.text}:c;
+            });
+            // 신규 카탈리스트 추가
+            const added=(r.new_catalysts||[]).filter(n=>n.text?.trim()).map(n=>({text:n.text,done:false,note:""}));
+            return{
+              ...x,
+              thesis:r.thesis||x.thesis,
+              catalysts:[...nc,...added],
+              status:r.status||x.status,
+              aiNote:r.summary||x.aiNote,
+            };
           }));
         }
-      }catch(e){console.warn(`[카탈리스트] ${s.name} 실패:`,e?.message);}
+      }catch(e){console.warn(`[종목점검] ${s.name} 실패:`,e?.message);}
       setProg({n:i+1,total:all.length});
       if(i<all.length-1)await sleep(800);
     }
@@ -513,7 +544,7 @@ export default function App() {
   const filtered=stocks.filter(s=>s.type===tab);
   const hCnt=stocks.filter(s=>s.type==="holding").length;
   const wCnt=stocks.filter(s=>s.type==="watchlist").length;
-  const busyLabel=busyMode==="price"?`📈 현재가 조회 중 · ${prog.n}/${prog.total}`:busyMode==="catalyst"?`🔍 카탈리스트 점검 중 · ${prog.n}/${prog.total}`:"";
+  const busyLabel=busyMode==="price"?`📈 현재가 조회 중 · ${prog.n}/${prog.total}`:busyMode==="catalyst"?`🔍 종목점검 중 · ${prog.n}/${prog.total}`:"";
 
   return (
     <div style={{minHeight:"100vh",background:"#e8ecf4",fontFamily:"'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif"}}>
@@ -528,7 +559,7 @@ export default function App() {
               📈 현재가 업데이트
             </button>
             <button onClick={handleCatalysts} disabled={busy} style={{padding:"7px 14px",borderRadius:8,border:"none",background:busy?"#334155":"#7c3aed",color:busy?"#64748b":"white",fontWeight:700,fontSize:13,cursor:busy?"not-allowed":"pointer",whiteSpace:"nowrap"}}>
-              🔍 카탈리스트 점검
+              🔍 종목점검
             </button>
             <button onClick={()=>setModal({_new:true,type:tab})} disabled={busy} style={{padding:"7px 14px",borderRadius:8,border:"none",background:"#059669",color:"white",fontWeight:700,fontSize:13,cursor:"pointer"}}>
               + 추가
