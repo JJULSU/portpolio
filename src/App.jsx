@@ -323,10 +323,51 @@ const EMPTY=(type="holding")=>({
 function EditModal({stock,onSave,onClose}) {
   const isNew=!!stock._new;
   const [f,setF]=useState(()=>isNew?EMPTY(stock.type||"holding"):{...stock});
+  const [aiLoading,setAiLoading]=useState(false);
   const set=(k,v)=>setF(p=>({...p,[k]:v}));
   const setCat=(i,k,v)=>setF(p=>({...p,catalysts:p.catalysts.map((c,j)=>j===i?{...c,[k]:v}:c)}));
   const addCat=()=>setF(p=>({...p,catalysts:[...p.catalysts,{text:"",done:false,note:""}]}));
   const delCat=i=>setF(p=>({...p,catalysts:p.catalysts.filter((_,j)=>j!==i)}));
+
+  const handleAiFill=async()=>{
+    if(!f.name.trim()||!f.code.trim()){alert("종목명과 코드를 먼저 입력해주세요.");return;}
+    setAiLoading(true);
+    try{
+      const existingCats=f.catalysts.filter(c=>c.text.trim()).map((c,i)=>`${i+1}. [${c.done?"완료":"미완료"}] ${c.text}`).join("\n");
+      const prompt=`"${f.name}" (종목코드: ${f.code}, ${f.market}) 종목에 대해 최신 뉴스와 공시를 검색하여 투자 분석을 작성해주세요.
+${existingCats?`\n현재 카탈리스트:\n${existingCats}\n`:""}
+다음 JSON 형식으로만 응답하세요:
+{
+  "thesis": "핵심 투자 thesis (한국어, 2-4문장, 투자 근거와 차별화 포인트)",
+  "catalysts": [
+    {"text": "카탈리스트 항목명", "done": false, "note": ""},
+    {"text": "카탈리스트 항목명", "done": false, "note": ""},
+    {"text": "카탈리스트 항목명", "done": false, "note": ""}
+  ],
+  "status": "thesis_valid" | "catalyst_wait" | "damage_sign" | "monitoring",
+  "posType": "thesis_long" | "catalyst_mid" | "mixed" | "momentum",
+  "summary": "현재 투자 포인트 및 주요 이슈 2-3문장"
+}`;
+      const r=await callGemini(prompt);
+      if(r){
+        setF(p=>({
+          ...p,
+          thesis:r.thesis||p.thesis,
+          catalysts:r.catalysts?.length?r.catalysts.map(c=>({text:c.text||"",done:c.done||false,note:c.note||""})):p.catalysts,
+          status:r.status||p.status,
+          posType:r.posType||p.posType,
+          aiNote:r.summary||p.aiNote,
+        }));
+      }else{
+        alert("AI 응답 파싱 실패. 다시 시도해주세요.");
+      }
+    }catch(e){
+      alert(`AI 오류: ${e.message}`);
+    }finally{
+      setAiLoading(false);
+    }
+  };
+
   const submit=()=>{
     if(!f.name.trim()||!f.code.trim()){alert("종목명과 코드를 입력해주세요.");return;}
     onSave(f);
@@ -337,7 +378,12 @@ function EditModal({stock,onSave,onClose}) {
       <div onClick={e=>e.stopPropagation()} style={{background:"white",borderRadius:16,padding:24,width:"100%",maxWidth:580,maxHeight:"88vh",overflowY:"auto",boxShadow:"0 24px 60px rgba(0,0,0,0.18)"}}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:20}}>
           <div style={{fontWeight:700,fontSize:18,color:"#111827"}}>{isNew?"종목 추가":`${f.name} 수정`}</div>
-          <button onClick={onClose} style={{background:"none",border:"none",cursor:"pointer",fontSize:22,color:"#9ca3af",lineHeight:1,padding:0}}>×</button>
+          <div style={{display:"flex",gap:8,alignItems:"center"}}>
+            <button onClick={handleAiFill} disabled={aiLoading} style={{padding:"6px 14px",borderRadius:8,border:"none",background:aiLoading?"#e5e7eb":"#7c3aed",color:aiLoading?"#9ca3af":"white",fontWeight:600,fontSize:12,cursor:aiLoading?"not-allowed":"pointer",whiteSpace:"nowrap"}}>
+              {aiLoading?"⏳ AI 분석 중...":"🤖 AI 자동입력"}
+            </button>
+            <button onClick={onClose} style={{background:"none",border:"none",cursor:"pointer",fontSize:22,color:"#9ca3af",lineHeight:1,padding:0}}>×</button>
+          </div>
         </div>
         <div style={{display:"flex",flexDirection:"column",gap:14}}>
           <div style={{display:"flex",gap:10}}>
