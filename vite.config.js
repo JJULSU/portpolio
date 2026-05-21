@@ -3,5 +3,5 @@ import react from '@vitejs/plugin-react'
 
 export default defineConfig({
   plugins: [react()],
-  base: '/portpolio/',
+  base: process.env.DEPLOY_TARGET === 'ghpages' ? '/portpolio/' : '/',
 })

@@ -1,10 +1,16 @@
 import express from 'express';
 import cors from 'cors';
+import { fileURLToPath } from 'url';
+import { join, dirname } from 'path';
 
 const app = express();
 const PORT = 3001;
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const DIST = join(__dirname, '../dist');
 
 app.use(cors());
+app.use(express.static(DIST));
+
 
 const fetchChart = async (ticker) => {
   const url = `https://query1.finance.yahoo.com/v8/finance/chart/${ticker}?interval=1d&range=1d`;
@@ -33,7 +39,12 @@ app.get('/quote', async (req, res) => {
   }
 });
 
+// SPA 라우팅: 모든 경로를 index.html로
+app.get('*', (req, res) => {
+  res.sendFile(join(DIST, 'index.html'));
+});
+
 app.listen(PORT, () => {
-  console.log(`✅ 포트폴리오 프록시 서버 실행 중: http://localhost:${PORT}`);
+  console.log(`✅ 포트폴리오 매니저: http://localhost:${PORT}`);
   console.log('   종료하려면 Ctrl+C');
 });
