@@ -54,7 +54,7 @@ const INIT = [
    catalysts:[{text:"Q2 CoS 출하량/잠정실적",done:false,note:""},{text:"HBM4 사이클 개시 시 기판 수요 동반 상승",done:false,note:""}],
    posType:"catalyst_mid",profitRule:"카탈리스트 달성 시 30% 익절 후 재평가",
    riskLevel:"mid",status:"catalyst_wait",entryPrice:null,qty:null,currentPrice:null,changeRate:"",aiNote:""},
-  {id:uid(),type:"holding",name:"티엘비",code:"356150",market:"KOSDAQ",
+  {id:uid(),type:"holding",name:"티엘비",code:"356860",market:"KOSDAQ",
    thesis:"어드밴스드 패키징 기판 구조적 수혜. CoWoS 확대 장기 플레이. 2027 사이클이 본게임.",
    catalysts:[{text:"주요 고객사 수주 공시",done:false,note:""},{text:"2H26 어드밴스드 패키징 투자 재개 공식화",done:false,note:""}],
    posType:"thesis_long",profitRule:"2027 사이클 전까지 홀드. 50% 수익 구간 포지션 점검.",
@@ -447,20 +447,18 @@ export default function App() {
   const sleep=ms=>new Promise(r=>setTimeout(r,ms));
 
   const fetchYahooPrice=async(code,market)=>{
-    const suffix=market==="KOSPI"?".KS":".KQ";
-    const ticker=`${code}${suffix}`;
-    const yahooUrl=`https://query1.finance.yahoo.com/v7/finance/quote?symbols=${ticker}&fields=regularMarketPrice,regularMarketChangePercent,regularMarketPreviousClose`;
-    const proxyUrl=`https://corsproxy.io/?${yahooUrl}`;
-    const res=await fetchWithTimeout(proxyUrl,{
-      method:"GET",
-      headers:{"Accept":"application/json"},
-    },12000);
-    if(!res.ok)throw new Error(`yahoo ${res.status}`);
+    const res=await fetchWithTimeout(
+      `http://localhost:3001/quote?code=${code}&market=${market}`,
+      {headers:{"Accept":"application/json"}},
+      15000
+    );
+    if(!res.ok)throw new Error(`HTTP ${res.status}`);
     const d=await res.json();
-    const q=d?.quoteResponse?.result?.[0];
-    if(!q)throw new Error("no quote data");
-    const price=q.regularMarketPrice?Math.round(q.regularMarketPrice):null;
-    const pct=q.regularMarketChangePercent;
+    const meta=d?.chart?.result?.[0]?.meta;
+    if(!meta?.regularMarketPrice)throw new Error("no data");
+    const price=Math.round(meta.regularMarketPrice);
+    const prev=meta.chartPreviousClose||meta.previousClose;
+    const pct=prev?((meta.regularMarketPrice-prev)/prev*100):null;
     const rate=pct!=null?`${pct>=0?"+":""}${pct.toFixed(2)}%`:"";
     return{price,changeRate:rate};
   };
@@ -483,7 +481,7 @@ export default function App() {
         errors.push(s.name);
       }
       setProg({n:i+1,total:all.length});
-      if(i<all.length-1)await sleep(400);
+      if(i<all.length-1)await sleep(1200);
     }
     setBusy(false);setBusyMode("");
     if(errors.length>0)alert(`조회 실패 종목: ${errors.join(", ")}`);
