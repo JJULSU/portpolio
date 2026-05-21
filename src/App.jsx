@@ -114,7 +114,12 @@ async function callGemini(prompt) {
       }),
     }
   );
-  if (!res.ok) throw new Error(`Gemini API error: ${res.status}`);
+  if (res.status === 429) throw new Error("API 요청 한도 초과. 잠시 후 다시 시도해주세요.");
+  if (!res.ok) {
+    const errBody = await res.json().catch(() => ({}));
+    const msg = errBody?.error?.message || `Gemini API error: ${res.status}`;
+    throw new Error(msg);
+  }
   const d = await res.json();
   const txt = d?.candidates?.[0]?.content?.parts?.[0]?.text || "";
   return extractJSON(txt);
